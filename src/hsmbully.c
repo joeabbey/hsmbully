@@ -90,7 +90,7 @@
 PEC name
 #define CK_DECLARE_FUNCTION(returnType, name) returnType CK_EXPORT_SPEC CK_CALL_
 SPEC name
-#define CK_DECLARE_FUNCTION_POINTER(returnType, name) returnType CK_IMPORT_SPEC 
+#define CK_DECLARE_FUNCTION_POINTER(returnType, name) returnType CK_IMPORT_SPEC
 (CK_CALL_SPEC CK_PTR name)
 #define CK_CALLBACK_FUNCTION(returnType, name) returnType (CK_CALL_SPEC CK_PTR n
 ame)
@@ -195,8 +195,48 @@ int randomish_minmax (int min, int max) {
  * a multiple of 8) and return CK_RV.  If CK_RV == CKR_OK, the private
  * and public key handles will be filled with proper values.
  */
-
 CK_RV newkeypair (CK_SESSION_HANDLE seshdl,
+                  CK_ULONG keybits,
+                  CK_OBJECT_HANDLE_PTR pub,
+                  CK_OBJECT_HANDLE_PTR priv) {
+	CK_MECHANISM mechanism = { CKM_RSA_PKCS_KEY_PAIR_GEN, NULL_PTR, 0 };
+	CK_BYTE pubExp[] = {0x01, 0x00, 0x01};
+	CK_BYTE subject[] = { 0x12, 0x34 }; // dummy
+	CK_BYTE id[] = { 123 } ; // dummy
+	CK_BBOOL bFalse = CK_FALSE;
+	CK_BBOOL bTrue = CK_TRUE;
+	CK_ATTRIBUTE pukAttribs[] = {
+		{ CKA_TOKEN, &bTrue, sizeof(bTrue) },
+		{ CKA_PRIVATE, &bFalse, sizeof(bFalse) },
+		{ CKA_ENCRYPT, &bFalse, sizeof(bFalse) },
+		{ CKA_VERIFY, &bTrue, sizeof(bTrue) },
+		{ CKA_WRAP, &bFalse, sizeof(bFalse) },
+		{ CKA_MODULUS_BITS, &keybits, sizeof(keybits) },
+		{ CKA_PUBLIC_EXPONENT, &pubExp[0], sizeof(pubExp) }
+	};
+	CK_ATTRIBUTE prkAttribs[] = {
+		{ CKA_TOKEN, &bTrue, sizeof(bTrue) },
+		{ CKA_PRIVATE, &bTrue, sizeof(bTrue) },
+		{ CKA_SUBJECT, &subject[0], sizeof(subject) },
+		{ CKA_ID, &id[0], sizeof(id) },
+		{ CKA_SENSITIVE, &bTrue, sizeof(bTrue) },
+		{ CKA_DECRYPT, &bFalse, sizeof(bFalse) },
+		{ CKA_SIGN, &bTrue, sizeof(bTrue) },
+		{ CKA_UNWRAP, &bFalse, sizeof(bFalse) }
+	};
+
+	if (verbosity >= 3) {
+		printf ("   - Creating key pair with %lu bit modulus\n", keybits);
+	}
+
+        return P11("C_GenerateKeyPair") ( seshdl,
+					  &mechanism,
+							 pukAttribs, sizeof(pukAttribs)/sizeof(CK_ATTRIBUTE),
+							 prkAttribs, sizeof(prkAttribs)/sizeof(CK_ATTRIBUTE),
+							 pub, priv);
+}
+
+/* CK_RV newkeypair (CK_SESSION_HANDLE seshdl,
 		  CK_ULONG keybits,
 		  CK_OBJECT_HANDLE_PTR pub,
 		  CK_OBJECT_HANDLE_PTR priv) {
@@ -210,7 +250,7 @@ CK_RV newkeypair (CK_SESSION_HANDLE seshdl,
 		{ CKA_PUBLIC_EXPONENT, &pubexp, sizeof (pubexp) },
 		{ CKA_TOKEN, &ckTrue, sizeof (ckTrue) },
 		{ CKA_LOCAL, &ckTrue, sizeof (ckTrue) },
-		{ CKA_MODIFIABLE, &ckFalse, sizeof (ckFalse) },
+		{ CKA_MODIFIABLE, &ckTrue, sizeof (ckTrue) },
 		{ CKA_VERIFY, &ckTrue, sizeof (ckTrue) },
 		{ CKA_VERIFY_RECOVER, &ckFalse, sizeof (ckFalse) },
 		{ CKA_WRAP, &ckFalse, sizeof (ckFalse) },
@@ -220,7 +260,7 @@ CK_RV newkeypair (CK_SESSION_HANDLE seshdl,
 	CK_ATTRIBUTE privtmpl [] = {
 		{ CKA_PRIVATE, &ckTrue, sizeof (ckTrue) },
 		{ CKA_TOKEN, &ckTrue, sizeof (ckTrue) },
-		{ CKA_MODIFIABLE, &ckFalse, sizeof (ckFalse) },
+		{ CKA_MODIFIABLE, &ckTrue, sizeof (ckTrue) },
 		{ CKA_LOCAL, &ckTrue, sizeof (ckTrue) },
 		{ CKA_SENSITIVE, &ckTrue, sizeof (ckTrue) },
 		{ CKA_ALWAYS_SENSITIVE, &ckTrue, sizeof (ckTrue) },
@@ -241,7 +281,7 @@ CK_RV newkeypair (CK_SESSION_HANDLE seshdl,
 			pubtmpl, sizeof (pubtmpl) / sizeof (*pubtmpl),
 			privtmpl, sizeof (privtmpl) / sizeof (*privtmpl),
 			pub, priv);
-}
+} */
 
 
 /* =============================================================== */
@@ -461,7 +501,7 @@ void testslot_initiation (void) {
 				CU_PASS ("Properly failed session close in initiation test");
 			}
 		}
-		
+
 		/*
 		 * End of loop for a single initiation test.
 		 */
@@ -563,9 +603,9 @@ void testslot_fragmentation (void) {
 
 		retval = newkeypair (
 			seshdl,
-			keys [keypairs].modbits, 
-			&keys [keypairs].pub, 
-			&keys [keypairs].priv); 
+			keys [keypairs].modbits,
+			&keys [keypairs].pub,
+			&keys [keypairs].priv);
 
 		if (retval == CKR_OK) {
 			// Succeeded creating a key pair.  Increase counter.
@@ -1014,7 +1054,7 @@ int main (int argc, char *argv []) {
 		case 'p':	// --pin
 			storepin ("user", optarg, ascii_pin_user, sizeof (ascii_pin_user) - 1);
 			break;
-			
+
 		case 'P':	// --so-pin
 			storepin ("SO", optarg, ascii_pin_so, sizeof (ascii_pin_so) - 1);
 			break;
@@ -1152,8 +1192,8 @@ int main (int argc, char *argv []) {
 	atexit (bailout);
 	TESTRV ("Obtaining list of slots",
 		 P11("C_GetSlotList") (TRUE, slotlist, &slotcount));
-	if (slotcount != 1) {
-		fprintf (stderr, "Number of slots is %d, so not equal to 1 -- unsure which to test\n", (int) slotcount);
+	if (slotcount != 2) {
+		fprintf (stderr, "Number of slots is %d, so not equal to 2 -- unsure which to test\n", (int) slotcount);
 		exit (1);
 	}
 	slotid = slotlist [0];
